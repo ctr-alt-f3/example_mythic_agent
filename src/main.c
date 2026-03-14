@@ -264,7 +264,7 @@ void handle_ps_cmd(cJSON *task){
         cJSON_AddBoolToObject(obj,"completed",0);
         char task_id[37];
         strncpy(task_id,cJSON_GetObjectItemCaseSensitive(task, "id")->valuestring,37);
-        cJSON_AddItemToObject(obj,"task_id",task_id);
+        cJSON_AddStringToObject(obj,"task_id",task_id);
         cJSON_AddItemToArray(arr,user_input_p);
 
     unsigned char counter = 0;
