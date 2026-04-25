@@ -1,55 +1,82 @@
-
-
-// 
-
-#include <assert.h>
-#include <complex.h>
-#include <ctype.h>
-#include <errno.h>
-#include <fenv.h>
-#include <float.h>
-#include <inttypes.h>
-#include <iso646.h>
-#include <limits.h>
-#include <locale.h>
-#include <math.h>
-#include <setjmp.h>
-#include <signal.h>
-#include <stdalign.h>
-#include <stdarg.h>
-#include <stdatomic.h>
-//#include <stdbit.h>
 #include <stdbool.h>
-//#include <stdckdint.h>
-#include <stddef.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-//#include <stdmchar.h>
-#include <stdnoreturn.h>
-#include <string.h>
-#include <tgmath.h>
-//#include <threads.h>
-#include <time.h>
-#include <uchar.h>
-#include <wchar.h>
-#include <wctype.h>
-
 
 
 #define MAX_SIZE 100
 typedef struct {
-int items[MAX_SIZE]
-int last;
-int first;
-} queue;
+int items[MAX_SIZE];
+unsigned int front;
+unsigned int rear;
+short size;
+} Queue;
+
 void init_queue(Queue *q){
-
-	
+q->rear = 0;
+q->front = 0;
+q->size = 0;	
 }
 
-
-int main(){
-
-	return 0;
+static inline bool isEmpty(Queue *q) {
+    return q->size == 0;
 }
+
+static inline bool isFull(Queue *q) {
+    return q->size==MAX_SIZE;
+}
+
+void enqueue(Queue *q, int val){
+	if(isFull(q)){
+		printf("queue full :(\n");
+		return;
+	}	
+	q->items[q->rear] = val;
+	q->rear = (q->rear+1)%MAX_SIZE;
+	q->size++;
+	return;
+}
+
+int dequeue(Queue *q){
+	if(isEmpty(q)){
+		printf("queue empty :(\n");
+		return 0;
+	}
+	int ret = q->items[q->front];
+	q->front = (q->front + 1) %MAX_SIZE;
+	q->size--;
+	return ret;
+}
+void del_task(Queue *q){
+	if(isEmpty(q)){
+		printf("queue empty :(\n");
+		return;
+	}
+	q->front = (q->front + 1) %MAX_SIZE;
+	q->size--;
+}
+
+int peek(Queue *q){
+if(isEmpty(q)){
+		printf("queue empty :(\n");
+		return 0;
+	}
+
+return q->items[q->front];
+}
+// int main(){
+// 	Queue q;
+// 	init_queue(&q);
+// 	enqueue(&q, 6);
+// 	enqueue(&q, 9);
+// 	enqueue(&q, 420);
+// 	int a = dequeue(&q);//
+// 	int b = peek(&q);
+// 	printf("%d %d %d",a,b,isEmpty(&q));
+// 	putchar('\n');
+// 	del_task(&q);//
+// 	a = dequeue(&q);//
+// 	b = peek(&q);
+// 	printf("%d %d %d",a,b,isEmpty(&q));
+
+// 	return 0;
+// }
